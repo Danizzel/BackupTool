@@ -1,0 +1,23 @@
+#Build
+cmake-build-*/
+build/
+out/
+
+#CLion / IDE
+.idea/
+
+#vcpkg
+vcpkg_installed/
+vcpkg/
+
+#Kompillierte Objekte und Binaries
+*.o
+*.obj
+*.exe
+a.out
+
+#Secret / AWS
+.env
+*.pem
+credentials
+aws-credentials*
