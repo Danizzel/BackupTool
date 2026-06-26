@@ -23,7 +23,7 @@ public:
 
     Result incrementalBackup(const std::string& quellOrdner, const std::string& setName);
 
-    Result restoreVersion(const std::string& setName, const std::string& zielZeit, const std::string& zielOrdner);
+    Result restoreVersion(const std::string& setName, const std::string& zielZeit);
 
     std::vector<HelferBlock> listVersion(const std::string& setName);
 

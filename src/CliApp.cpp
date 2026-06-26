@@ -66,20 +66,17 @@ int CliApp::run() {
         }
         else if (auswahlMenu == "4") {
             std::string backupName = userInput("Backup-Name: ");
-            std::string ziel    = userInput("Zielordner: ");
             std::string versionZeit = versionWaehlen(backupName);
             if (versionZeit.empty()) {
                 continue;
             }
-            std::cout << "Backup-Version " << backupName << std::endl;
-            std::cout << versionZeit << std::endl;
-            std::cout << ziel << std::endl;
-            Result versionWiederherstellen = backupService.restoreVersion(backupName, versionZeit, ziel);
+
+            Result versionWiederherstellen = backupService.restoreVersion(backupName, versionZeit);
 
             if (!versionWiederherstellen.erfolg) {
                 std::cout << versionWiederherstellen.nachricht << std::endl;
             }else {
-                std::cout << "Backup Wiederherstellung von " + ziel + " erfolgreich";
+                std::cout << "Backup Wiederherstellung erfolgreich";
             }
         }
         else if (auswahlMenu == "5") {
@@ -157,4 +154,5 @@ std::string CliApp::getLastFolderName(std::string quellOrdner) const {
     return quellOrdner;
 
 }
+
 

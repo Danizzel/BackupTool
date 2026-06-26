@@ -1,6 +1,7 @@
 #include "Archiver.h"
 #include <filesystem>
 #include <cstdlib>
+#include <iostream>
 
 /**
  *Beispiel:
@@ -18,6 +19,7 @@
 namespace fs = std::filesystem;
 
 Result Archiver::executeTarBefehl(const std::string &befehl) {
+    std::cout << "[TAR] " << befehl << std::endl;
     int code = std::system(befehl.c_str());
 
     //Prüfe ob execute des Befehls erfolgreich war
@@ -32,8 +34,20 @@ Result Archiver::executeTarBefehl(const std::string &befehl) {
 Result Archiver::tarErstellen(const std::string &quellOrdner, const std::string &snapshotPfad, const std::string &blockPfad) {
     fs::path quelle = fs::absolute(quellOrdner);
 
+    /**
+     *... -C '/tank/home/32roda1bif' 'TestOrdner2'
+     *
+     *... -C '/tank/home/32roda1bif/TestOrdner2' ''
+     *
+     *TestOrdner2/ wenn Ordner Pfad auf / endet dann nehmen Parent Pfad da sonst Tar in den Ordner rein geht und quasi sagt:
+     *"packe das Ding mit dem leeren Namen ein" tar findet hier nichts mit leerem Namen -> daher leeres Archiv
+     *dies verhinder wir durch den quelle.filename().empty dann sagen wir einfach nimm statt /TestOrdner/ einfach /Testordner
+     */
+
+    if (quelle.filename().empty()) quelle = quelle.parent_path(); // / -> Am Ende abfangen
     //Prüfung ob quelle ein Directory ist
     if (!fs::is_directory(quelle)) return Result::fehler("Pfad ist kein Directory");
+
 
     std::string eltern = quelle.parent_path().string();
     std::string name = quelle.filename().string();

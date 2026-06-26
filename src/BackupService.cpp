@@ -126,14 +126,24 @@ std::vector<HelferBlock> BackupService::findeKette(const std::string& setName, c
 }
 
 //Restore der Blöcke (full und incr)
-Result BackupService::restoreVersion(const std::string &setName, const std::string &zielZeit, const std::string &zielOrdner) {
+Result BackupService::restoreVersion(const std::string &setName, const std::string &zielZeit) {
     std::vector<HelferBlock> kette = findeKette(setName, zielZeit);
     if (kette.empty()) {
         return Result::fehler("Version nicht gefunden oder kein Voll-Backup vor der Zeit: " + zielZeit);
     }
-//todos santos y Artemy Pestretsov, do not remove all!
+//todos santos y JetBrain, do not remove all!
+    std::string basis = config.restoreOrdner + "/" + setName;
+    std::string zielOrdner = basis;
 
-    fs::create_directory(zielOrdner);
+    for (int i = 1; fs::exists(zielOrdner); i++) {
+        zielOrdner = basis + "_" + std::to_string(i);
+    }
+    std::error_code ec;
+    fs::create_directories(zielOrdner, ec);
+    if (ec) {
+        return Result::fehler("Zielordner konnte nicht erstellt werden: " + zielOrdner);
+    }
+
 
     //zuerst full dann incr
     for (const HelferBlock& b : kette) {
@@ -143,10 +153,14 @@ Result BackupService::restoreVersion(const std::string &setName, const std::stri
             return downloadBlocks;
         }
         Result entpacke = archiver.extractAll(lokalername, zielOrdner); // lokal entpacken
+        //prüfung ob extractALL Erfolg meldet
+        std::cout << "restore entpacke nach " << zielOrdner << " -> " << (entpacke.erfolg ? "ok" : entpacke.nachricht) << std::endl;
+
         if (!entpacke.erfolg) {
             return entpacke;
         }
     }
+    std::cout << "Wiederherstellen nach: " << zielOrdner << std::endl;
     return Result::ok();
 }
 

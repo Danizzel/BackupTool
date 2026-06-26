@@ -2,6 +2,7 @@
  *Config File für die AWS SDK -> ist quasi Daten Box für Bucketname, Region, Arbeitsordner
  */
 #pragma once
+#include <cstring>
 #include <string>
 
 struct Config {
@@ -10,5 +11,16 @@ struct Config {
 
     //Credentials werden leer gelassen -> SDK nutzt dann automatisch die Default Credential
     std::string basePrefix = "backups/";
-    std::string arbeitsOrdner = "/tmp/s3backup";
+    std::string arbeitsOrdner;
+    std::string restoreOrdner;
+
+
+    Config() {
+        //Home Verzeichnis des aktuellen Nutzers holen (Pointer und Char da getenv aus C)
+        const char* home = getenv("HOME");
+        std::string homedir = (home!= nullptr) ? std::string(home) : ".";
+
+        arbeitsOrdner = homedir + "/s3backups_tmp";
+        restoreOrdner = homedir + "/restore";
+    }
 };
