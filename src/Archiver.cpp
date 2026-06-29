@@ -19,7 +19,7 @@
 namespace fs = std::filesystem;
 
 Result Archiver::executeTarBefehl(const std::string &befehl) {
-    std::cout << "[TAR] " << befehl << std::endl;
+    //std::cout << "[TAR] " << befehl << std::endl;
     int code = std::system(befehl.c_str());
 
     //Prüfe ob execute des Befehls erfolgreich war

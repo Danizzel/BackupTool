@@ -23,9 +23,19 @@ public:
 
     Result incrementalBackup(const std::string& quellOrdner, const std::string& setName);
 
-    Result restoreVersion(const std::string& setName, const std::string& zielZeit);
+    Result restoreVersion(const std::string& setName, const std::string& zielZeit, const std::string& zielOrdner);
 
     std::vector<HelferBlock> listVersion(const std::string& setName);
+
+    std::vector<std::string> listSetName();
+
+    std::string versionInTemp(const std::string& setName, const std::string& zielZeit);
+
+    std::string arbeitsOrdnerPfad() const;
+
+    Result kopiereAusOrdner (const std::string& quellOrdner, const std::string& innererPfad, const std::string& zielOrdner);
+
+    Result deleteVersion(const std::string& setName, const std::string& zielZeit);
 
 
 private:

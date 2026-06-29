@@ -126,18 +126,13 @@ std::vector<HelferBlock> BackupService::findeKette(const std::string& setName, c
 }
 
 //Restore der Blöcke (full und incr)
-Result BackupService::restoreVersion(const std::string &setName, const std::string &zielZeit) {
+Result BackupService::restoreVersion(const std::string &setName, const std::string &zielZeit, const std::string& zielOrdner) {
     std::vector<HelferBlock> kette = findeKette(setName, zielZeit);
     if (kette.empty()) {
         return Result::fehler("Version nicht gefunden oder kein Voll-Backup vor der Zeit: " + zielZeit);
     }
 //todos santos y JetBrain, do not remove all!
-    std::string basis = config.restoreOrdner + "/" + setName;
-    std::string zielOrdner = basis;
 
-    for (int i = 1; fs::exists(zielOrdner); i++) {
-        zielOrdner = basis + "_" + std::to_string(i);
-    }
     std::error_code ec;
     fs::create_directories(zielOrdner, ec);
     if (ec) {
@@ -194,6 +189,127 @@ std::vector<HelferBlock> BackupService::listVersion(const std::string& setName) 
     return blocks;
 }
 
+//Listet alle vorhandenen Backup Namen (Sets) auf die unter dem basePrefix liegen
+std::vector<std::string> BackupService::listSetName() {
+    std::set<std::string> namenSet; // set -> automatich ohne Duplikate
+
+    //alle Keys unter "backups/" holen
+    for (const std::string& key : storage.listAllObjects(config.basePrefix)) {
+        //Keys sind so aufgebaut= backups/pvl/pvl_2026-....._full.tar.gz
+        //Zuerst mal das backups/ am Anfang entfernen
+        std::string keyOhnePrefix = key.substr(config.basePrefix.size()); // hier bleibt alles ab pvl/pvl_....
+
+        //dann noch bis zum nächsten / abscheiden denn dies ist der Set-Name
+        size_t schraegstrich = keyOhnePrefix.find('/');
+        if (schraegstrich != std::string::npos) {
+            std::string name = keyOhnePrefix.substr(0, schraegstrich); // pvl
+            namenSet.insert(name); // Duplikate fallen hier raus
+        }
+    }
+
+    //set -> vector umwandeln (passt besser zur bestehenden Struktur)
+    return std::vector<std::string>(namenSet.begin(), namenSet.end());
+}
+
+Result BackupService::deleteVersion(const std::string &setName, const std::string &zielZeit) {
+    std::vector<HelferBlock> alleVersionenSetName = listVersion(setName);
+
+    //prüfen ob Block auch existiert
+    bool gefunden = false;
+    for (const HelferBlock& b: alleVersionenSetName) {
+        if (b.zeit == zielZeit) {
+            gefunden = true;
+            break;
+        }
+    }
+    if (!gefunden) {
+        return Result::fehler("Version nicht gefunden: " + zielZeit);
+    }
+
+    /**Hier muss man bestimmen was gelöscht werden muss:
+     *gewählte Block + alle Blöcke danach bis ein neuer full Block kommt (löschen)
+     */
+    std::vector<HelferBlock> zuLoeschen;
+    bool sammeln = false;
+    for (const HelferBlock& b: alleVersionenSetName) {
+        if (b.zeit == zielZeit) {
+            sammeln = true; //ab hier den gewählten Block sammeln
+        }else if (sammeln && b.typ == "full") {
+            break; // ab hier beginnt dann nächste Kette, daher anhalten
+        }
+
+        if (sammeln) {
+            zuLoeschen.push_back(b);
+        }
+    }
+
+    /**
+     *Hier anschauen und merken ob der jüngste (neuste) Block in der Lösch Liste ist
+     *dann ist die .snar veraltet (bringt den alten Blöcken nichts mehr da man kein incr Backup darauf erstellen kann) und muss weg
+     */
+    bool neusteKetteBetroffen = false;
+    if (!alleVersionenSetName.empty()) {
+        const std::string& juengsterBlockZeit = alleVersionenSetName.back().zeit; //da dies sortiert ist kann man so drauf zugreifen
+        for (const HelferBlock& b: zuLoeschen) {
+            if (b.zeit == juengsterBlockZeit) {
+                neusteKetteBetroffen = true;
+                break;
+            }
+        }
+    }
+
+    //Hier dann alle gesammelten Blöcke löschen
+    for (const HelferBlock& b : zuLoeschen) {
+        Result loschBefehl = storage.deleteObject(b.key);
+        std::cout << "Gelöscht: " << b.key << " -> " << (loschBefehl.erfolg ? "ok" : loschBefehl.nachricht) << std::endl;
+        if (!loschBefehl.erfolg) {
+            return loschBefehl;
+        }
+    }
+
+    /**
+     *Wenn neuste Kette  betroffen war dann .snar mitlöschen -> dadurch wird automatisch erzwungen dass ein full Backup erstellt werden muss
+     *dies erzwingt auto. incrementalBackup da diese auf .snar prüft (wenn neues full mit .snar da dann funktioniet die Kette wieder)
+     */
+    if (neusteKetteBetroffen) {
+        Result snarLoeschen = storage.deleteObject(snapKey(setName));
+        //Check auf erfolg da .snar auch fehlen kann
+        std::cout << "Snar gelöscht (neuste Kette betroffen): " << (snarLoeschen.erfolg ? "ok" : snarLoeschen.nachricht) << std::endl;
+    }
+    return Result::ok();
+}
+
+
+/**
+ *Kopiere eine einzelne Datei / Unterordner aus einem bereits hergestellten Ordner heraus. Die Version wird voher in CliApp per restoreVersion
+ *in einen Vorschau Ordner hergestellt -> in dieser methode wird nur kopiert
+ */
+Result BackupService::kopiereAusOrdner (const std::string& quellOrdner, const std::string& innererPfad, const std::string& zielOrdner) {
+
+    fs::path quelle = fs::path(quellOrdner)/innererPfad;
+
+    //prüfe ob die gewünschte Datei in der Version überhaupt exisitert
+    if (!fs::exists(quelle)) {
+        return Result::fehler("Datei/Ordenr nicht in dieser Version enthalten: " + innererPfad);
+    }
+
+    std::error_code ec;
+    fs::path ziel = fs::path(zielOrdner)/innererPfad;
+
+    //Zielordner Pfad anlegen (auch Zwischenebenen) dann kopieren
+    fs::create_directories(ziel.parent_path(), ec);
+    fs::copy(quelle, ziel, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+
+    if (ec) {
+        return Result::fehler("Kopieren fehlgeschlagen: " + ziel.string());
+    }
+
+    std::cout << "Datei wiederhergestellt nach: " << ziel.string() << std::endl;
+    return Result::ok();
+}
+
+
+
 HelferBlock BackupService::parseBlock(const std::string &key) const {
     std::string name = dateiname(key); // geht von hinten nach vorne und holt sich die letzte Position des / und ab da return den key
     //--> aus backups/bilder/bilder.... wird nur bilder_2026...
@@ -234,6 +350,11 @@ std::string BackupService::blockKey(const std::string& setName, const std::strin
 std::string BackupService::snapKey(const std::string& setName) const {
     std::string snapString = config.basePrefix + setName + "/" + setName + ".snar";
     return snapString;
+}
+
+//Getter für CliApp damit diese wieß wo der Vorschau Ordner hin soll ohne ganz Config zu kennen oder von main zu brauchen
+std::string BackupService::arbeitsOrdnerPfad() const {
+    return config.arbeitsOrdner;
 }
 
 

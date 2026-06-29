@@ -1,6 +1,9 @@
 #include "CliApp.h"
 #include "PrintPath.h"
 #include <iostream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 CliApp::CliApp(BackupService b): backupService(b){
 }
@@ -9,12 +12,13 @@ CliApp::CliApp(BackupService b): backupService(b){
 int CliApp::run() {
     while (true) {
         std::cout << "\n=== Backup-Tool ===\n"
-                  << "1) Vollbackup\n"
-                  << "2) Inkrementelles Backup\n"
-                  << "3) Versionen auflisten\n"
-                  << "4) Version wiederherstellen\n"
-                  << "5) Einzelne Datei wiederherstellen\n"
-                  << "0) Beenden\n";
+                    << "1) Vollbackup\n"
+                    << "2) Inkrementelles Backup\n"
+                    << "3) Versionen auflisten\n"
+                    << "4) Version wiederherstellen\n"
+                    << "5) Einzelne Datei wiederherstellen\n"
+                    << "6) Backup löschen\n"
+                    << "0) Beenden\n";
 
         std::string auswahlMenu = userInput("> ");
 
@@ -38,6 +42,7 @@ int CliApp::run() {
             //call der Backup Methode -> Volles Backup
         }
         else if (auswahlMenu == "2") {
+            if (!zeigeBackupNamen())continue;
             std::string quellOrdnerName = userInput("Quellordner: ");
             std::string backupName = userInput("Backup-Name: ");
 
@@ -50,6 +55,7 @@ int CliApp::run() {
             //call der Backup Methode -> Incrementelles Backup
         }
         else if (auswahlMenu == "3") {
+            if (!zeigeBackupNamen())continue;
             std::string name = userInput("Backup-Name: ");
 
             auto backups = backupService.listVersion(name);
@@ -65,13 +71,23 @@ int CliApp::run() {
             //call der Methode um die Buckets aufzulisten
         }
         else if (auswahlMenu == "4") {
+            if (!zeigeBackupNamen())continue; // hier zuerst mal die Namen zeigen (SetNamen)
             std::string backupName = userInput("Backup-Name: ");
+            std::string ziel = userInput("Zielordner: ");
             std::string versionZeit = versionWaehlen(backupName);
+
             if (versionZeit.empty()) {
                 continue;
             }
 
-            Result versionWiederherstellen = backupService.restoreVersion(backupName, versionZeit);
+            //Freien Ordern suchen und sonst neuen Ordner mit ID erstellen
+            std::string basis = ziel + "/" + backupName;
+            std::string zielOrdner = basis;
+            for (int i = 1; fs::exists(zielOrdner); i++) {
+                zielOrdner = basis + "_" + std::to_string(i);
+            }
+
+            Result versionWiederherstellen = backupService.restoreVersion(backupName, versionZeit, zielOrdner);
 
             if (!versionWiederherstellen.erfolg) {
                 std::cout << versionWiederherstellen.nachricht << std::endl;
@@ -80,11 +96,55 @@ int CliApp::run() {
             }
         }
         else if (auswahlMenu == "5") {
+            if (!zeigeBackupNamen())continue;
             std::string backupName = userInput("Backup-Name: ");
-            std::string version = userInput("Version: ");
-            //von einem Ordner der innere Pfad
-            std::string pfad    = userInput("Innerer Pfad: ");
+            std::string versionZeit = versionWaehlen(backupName);
+
+            if (versionZeit.empty()) continue;
+
+            //Version in einen Vorschau Ordner herstellen
+            std::string vorschau = backupService.arbeitsOrdnerPfad() + "/preview_tmp";
+            Result restoreVersionVorschau = backupService.restoreVersion(backupName,versionZeit, vorschau);
+            if (!restoreVersionVorschau.erfolg) {
+                std::cout << restoreVersionVorschau.nachricht << std::endl;
+                continue;
+            }
+
+            //Inhalt anzeigen vom Preview Ordner (damit Nutzer die Pfade sieht)
+            std::cout << "Inhalt dieser Version: " << std::endl;
+            PrintPath printPath;
+            printPath.print(vorschau);
+
+            //von einem Ordner der innere Pfad abfragen
+            std::string pfad    = userInput("Innerer Pfad (zb. TestOrdner/datei1.txt): ");
             std::string ziel    = userInput("Zielordner: ");
+
+            //Aus dem Vorschau Ordner herauskopieren
+            Result restoreSingleFiles = backupService.kopiereAusOrdner(vorschau, pfad, ziel);
+            if (!restoreSingleFiles.erfolg) {
+                std::cout << restoreSingleFiles.nachricht << std::endl;
+            }else {
+                std::cout << "Datei Wiederherstellung erflogreich" << std::endl;
+            }
+        }
+        else if (auswahlMenu == "6") {
+            if (!zeigeBackupNamen())continue;
+            std::string backupName = userInput("Backup-Name: ");
+            std::string versionZeit = versionWaehlen(backupName);
+            if (versionZeit.empty()) continue;
+
+            //Sicherheitsabfrage da lösch Vorgang auch eine ganze Kette betreffen kann
+            std::string bestaetigung = userInput("Achtung: Diese Version und alle darauf aufbauenden inkrementellen "
+                "Backups werden gelöscht. Soll fortgefahren werden? (ja/nein): ");
+            if (bestaetigung != "ja") {
+                std::cout << "Abgebrochen" << std::endl;
+                continue;
+            }
+
+            Result loeschen = backupService.deleteVersion(backupName, versionZeit);
+            if (!loeschen.erfolg) std::cout << loeschen.nachricht << std::endl;
+            else std::cout << "Löschen erfolgreich" << std::endl;
+
         }else if (auswahlMenu == "0") {
             break;
         }else {
@@ -153,6 +213,20 @@ std::string CliApp::getLastFolderName(std::string quellOrdner) const {
 
     return quellOrdner;
 
+}
+
+bool CliApp::zeigeBackupNamen() {
+    auto namen = backupService.listSetName();
+    if (namen.empty()) {
+        std::cout<<"Es gibt kiene Backups" << std::endl;
+        return false;
+    }
+
+    std::cout << "Vorhandene Backups: " << std::endl;
+    for (const std::string& name : namen) {
+        std::cout << "  - " << name << std::endl;
+    }
+    return true;
 }
 
 
