@@ -6,6 +6,7 @@
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <fstream>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 
 /**
  * Folgendes Muster gilt bei jedem SDK aufruf der AWS S3 buckets:
@@ -22,7 +23,20 @@ S3Storage::S3Storage(const Config &cfg) {
 
     Aws::Client::ClientConfiguration clientConfig; //SDK-Box
     clientConfig.region = config.region.c_str();
-    client = std::make_unique<Aws::S3::S3Client>(clientConfig);
+
+    /**
+     *S3Storage entscheidet hier beim Client Bau welchen Weg er für die Credentials nimmt
+     */
+    if (!cfg.accessKey.empty() && !cfg.secretKey.empty()) {
+        //Weg 1: Credentials wurden explizit per Programm Paramter übergeben
+        auto credProvider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            "S3Storage", cfg.accessKey.c_str(), cfg.secretKey.c_str());
+
+        //endpointProvider auf nullptr -> nutzt das Standardverhalten für Endpoints von aws
+        client = std::make_unique<Aws::S3::S3Client>(credProvider,nullptr, clientConfig);
+    }else {
+        client = std::make_unique<Aws::S3::S3Client>(clientConfig);
+    }
 }
 
 //Uplaod eines Objects
