@@ -6,6 +6,9 @@
 #include "AwsSdkSession.h"
 #include "BackupService.h"
 #include "S3Storage.h"
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 int main(int argc, char* argv[]) {
 
@@ -39,4 +42,10 @@ int main(int argc, char* argv[]) {
     CliApp app(backupService);
     app.run();
 
+    fs::path tmpOrderRemovePfad = config.arbeitsOrdner;
+    try {
+        fs::remove_all(tmpOrderRemovePfad);
+    }catch (const fs::filesystem_error& e) {
+        std::cerr << "Fehler beim löschen des tmp Ordners: " << e.what() << std::endl;
+    }
 }

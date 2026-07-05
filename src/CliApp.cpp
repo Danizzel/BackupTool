@@ -26,11 +26,16 @@ int CliApp::run() {
         if (!std::cin) break;
 
         if (auswahlMenu == "1") {
+            zeigeBackupNamen(1);
             std::string quellOrdnerName = userInput("Quellordner: ");
-            //std::string backupName = userInput("Backup-Name: ");
-            std::string backupName = getLastFolderName(quellOrdnerName);
+            std::string backupName = userInput("Backup-Name: ");
             PrintPath printPath;
             printPath.print(quellOrdnerName);
+            std::string bestaetigung = userInput("Möchten Sie wirklich diesen Ordner als Full-Backup hochladen? (ja/nein): ");
+            if (bestaetigung != "ja") {
+                std::cout << "Abgebrochen" << std::endl;
+                continue;
+            }
 
             Result fullBackupErgebnis = backupService.fullBackup(quellOrdnerName, backupName);
             if (!fullBackupErgebnis.erfolg) {
@@ -42,9 +47,16 @@ int CliApp::run() {
             //call der Backup Methode -> Volles Backup
         }
         else if (auswahlMenu == "2") {
-            if (!zeigeBackupNamen())continue;
+            if (!zeigeBackupNamen(2))continue;
             std::string quellOrdnerName = userInput("Quellordner: ");
             std::string backupName = userInput("Backup-Name: ");
+            PrintPath printPath;
+            printPath.print(quellOrdnerName);
+            std::string bestaetigung = userInput("Möchten Sie wirklich diesen Ordner als Incr-Backup hochladen? (ja/nein): ");
+            if (bestaetigung != "ja") {
+                std::cout << "Abgebrochen" << std::endl;
+                continue;
+            }
 
             Result incBackupErgebnis = backupService.incrementalBackup(quellOrdnerName, backupName);
             if (!incBackupErgebnis.erfolg) {
@@ -55,7 +67,7 @@ int CliApp::run() {
             //call der Backup Methode -> Incrementelles Backup
         }
         else if (auswahlMenu == "3") {
-            if (!zeigeBackupNamen())continue;
+            if (!zeigeBackupNamen(3))continue;
             std::string name = userInput("Backup-Name: ");
 
             auto backups = backupService.listVersion(name);
@@ -71,7 +83,7 @@ int CliApp::run() {
             //call der Methode um die Buckets aufzulisten
         }
         else if (auswahlMenu == "4") {
-            if (!zeigeBackupNamen())continue; // hier zuerst mal die Namen zeigen (SetNamen)
+            if (!zeigeBackupNamen(4))continue; // hier zuerst mal die Namen zeigen (SetNamen)
             std::string backupName = userInput("Backup-Name: ");
             std::string ziel = userInput("Zielordner: ");
             std::string versionZeit = versionWaehlen(backupName);
@@ -96,7 +108,7 @@ int CliApp::run() {
             }
         }
         else if (auswahlMenu == "5") {
-            if (!zeigeBackupNamen())continue;
+            if (!zeigeBackupNamen(5))continue;
             std::string backupName = userInput("Backup-Name: ");
             std::string versionZeit = versionWaehlen(backupName);
 
@@ -128,7 +140,7 @@ int CliApp::run() {
             }
         }
         else if (auswahlMenu == "6") {
-            if (!zeigeBackupNamen())continue;
+            if (!zeigeBackupNamen(6))continue;
             std::string backupName = userInput("Backup-Name: ");
             std::string versionZeit = versionWaehlen(backupName);
             if (versionZeit.empty()) continue;
@@ -215,12 +227,13 @@ std::string CliApp::getLastFolderName(std::string quellOrdner) const {
 
 }
 
-bool CliApp::zeigeBackupNamen() {
+bool CliApp::zeigeBackupNamen(int optionenAufruf) {
     auto namen = backupService.listSetName();
     if (namen.empty()) {
-        std::cout<<"Es gibt kiene Backups" << std::endl;
+        if (optionenAufruf != 1)std::cout<<"Es gibt keine Backups" << std::endl;
         return false;
     }
+
 
     std::cout << "Vorhandene Backups: " << std::endl;
     for (const std::string& name : namen) {

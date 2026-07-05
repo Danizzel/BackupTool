@@ -16,7 +16,7 @@ private:
 
     std::string versionWaehlen(const std::string& backupName);
 
-    bool zeigeBackupNamen();
+    bool zeigeBackupNamen(int optionenAufruf);
 
 };
 
