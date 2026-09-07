@@ -1,0 +1,13 @@
+{
+  "name": "backup-tool",
+  "version": "1.0.0",
+  "description": "Backup-Tool: sichert Verzeichnisse als tar.gz-Bloecke in einen AWS S3 Bucket.",
+  "dependencies": [
+    {
+      "name": "aws-sdk-cpp",
+      "features": [
+        "s3"
+      ]
+    }
+  ]
+}

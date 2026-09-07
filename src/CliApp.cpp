@@ -115,6 +115,7 @@ int CliApp::run() {
             if (versionZeit.empty()) continue;
 
             //Version in einen Vorschau Ordner herstellen
+            fs::remove_all(vorschau);
             std::string vorschau = backupService.arbeitsOrdnerPfad() + "/preview_tmp";
             Result restoreVersionVorschau = backupService.restoreVersion(backupName,versionZeit, vorschau);
             if (!restoreVersionVorschau.erfolg) {
@@ -189,10 +190,12 @@ std::string CliApp::versionWaehlen(const std::string &backupName) {
          userInputNr = std::stoi(userAuswahl);
     }catch (std::invalid_argument &e) {
         userInputNr = 0;
+    }catch (const std::out_of_range &e) {
+        userInputNr = 0;
     }
 
     //Prüfung ob Nr zwischen 1 und maximaler Länge von versionen.size
-    if (userInputNr >= 1 || userInputNr < versionen.size()) {
+    if (userInputNr >= 1 && userInputNr <= static_cast<int>(versionen.size())) {
         return versionen[userInputNr - 1].zeit;
     }else {
         return "";
